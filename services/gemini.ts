@@ -9,7 +9,7 @@ const NEWAPI_BASE_URL = "https://api.gemai.cc";
 // 文本与图片统一用 Google Gemini 模型名称
 // 按 NewAPI 文档，推荐 gemini-2.0-flash，有需要可以在控制台改成 2.5 等
 const TEXT_MODEL = "[满血A]gemini-3-pro-preview-thinking";
-const IMAGE_MODEL = "gemini-3-pro-image-preview";
+const IMAGE_MODEL = "[满血A]gemini-3-pro-preview-thinking";
 
 const SYSTEM_INSTRUCTION = `
 你是一位拥有 20 年经验的顶级人像摄影导师，你正在指导一位完全不懂摄影的新手，

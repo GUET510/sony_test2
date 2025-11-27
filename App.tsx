@@ -23,9 +23,9 @@ const App: React.FC = () => {
       const generatedPlans = await generateShootingPlans(input);
       setPlans(generatedPlans);
       setLoadingState(LoadingState.COMPLETE);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setError("生成方案失败。请检查您的 API Key 并重试。");
+      setError(err?.message || "生成方案失败，请打开控制台查看详细错误日志。");
       setLoadingState(LoadingState.ERROR);
     }
   };

@@ -1,42 +1,45 @@
 import { ShootingPlan, UserInput } from "../types";
 
-const API_KEY = process.env.API_KEY as string | undefined;
+// 只用 Vite 的环境变量，避免 Node 端的 process 乱入
+const API_KEY = import.meta.env.VITE_GEMINI_API_KEY as string | undefined;
+
+// NewAPI 网关地址
 const NEWAPI_BASE_URL = "https://api.gemai.cc";
 
-// 默认模型，可以按你在控制台看到的实际名称调整
-const TEXT_MODEL = "gemini-3-pro-preview";
-const IMAGE_MODEL = "gemini-3-pro-preview";
+// 文本 / 图片 使用的模型名（按你在 newapi 控制台里对应的 Google 模型来调）
+// 不行就先用 gemini-2.0-flash 测试，稳定一点
+const TEXT_MODEL = "gemini-2.5-flash-image";
+const IMAGE_MODEL = "gemini-2.5-flash-image";
 
 const SYSTEM_INSTRUCTION = `
-你是一位拥有 20 年经验的顶级人像摄影导师，你正在指导一位**完全不懂摄影的新手**使用 **Sony A7R3** 和 **24-70mm F4** 镜头拍出大片。
+你是一位拥有 20 年经验的顶级人像摄影导师，你正在指导一位完全不懂摄影的新手，
+使用 Sony A7R3 和 24-70mm F4 镜头拍出“看起来很专业”的人像大片。
 
-你的任务是基于用户输入设计**保姆级**拍摄方案。
-请严格按照用户指定的数量生成对应比例的方案（9:16 竖构图 或 16:9 横构图）。
+你的任务是基于用户输入设计“保姆级”拍摄方案：
+- 一部分 9:16 竖构图（适合手机/社媒）
+- 一部分 16:9 横构图（更电影感）
 
-**器材硬件约束：**
-1. **镜头限制**：最大光圈 **F4.0**。若需虚化，强制建议使用 **50mm-70mm** 长焦端并靠近拍摄。
-2. **高画质优势**：利用 4240 万像素优势，构图可以稍松，便于后期裁切。
-3. **防抖**：利用机身防抖，静态拍摄快门可低至 1/60s。
+硬件约束：
+- 镜头最大光圈 F4.0，如需背景虚化，优先使用 50–70mm 端并靠近拍摄。
+- 利用 4240 万像素，构图可以稍微宽松，方便后期裁切。
+- 开启机身防抖，静态人像快门可以低到 1/60s 左右。
 
-**核心要求 - 必须让新手“照着做就能拍”：**
-- **构图指导 (compositionGuide)**：禁止使用抽象词汇。必须说“打开相机的九宫格线，把模特的左眼放在右上角的交叉点上”或“让地平线位于画面下三分之一处”。
-- **光线指导 (lightingGuide)**：禁止只说“顺光/逆光”。必须说“让模特站在窗户前1米处，脸转向窗户45度”或“让阳光从模特头发后面照过来，形成发光轮廓”。
-- **摄影师机位 (photographerPosition)**：必须极度具体。例如：“不要站着拍！单膝跪地，把相机举到胸口高度，屏幕翻折向上看”或“站在椅子上俯拍”。
-- **沟通话术 (modelDirecting)**：提供一句具体的**台词**。例如：“不要说‘笑一下’，要说：‘想象你刚刚在街角偶遇了暗恋的人’”。
-
-所有指导性文字必须用**中文**，语气鼓励、清晰、极其具体，像在手把手教。
+你必须把复杂的摄影知识，翻译成完全不懂摄影的人也能照做的“傻瓜式步骤”。
+所有说明使用中文，语气友好但直接，多用可执行动作，少用抽象形容词。
 `;
 
 // 通用 HTTP 调用 NewAPI / Google Gemini
 async function callGemini(model: string, body: any): Promise<any> {
   if (!API_KEY) {
-    throw new Error("API_KEY 未配置，请在 Zeabur 中设置 GEMINI_API_KEY 环境变量");
+    throw new Error(
+      "VITE_GEMINI_API_KEY 未配置，请在 Zeabur 环境变量中设置 VITE_GEMINI_API_KEY"
+    );
   }
 
   const baseUrl = NEWAPI_BASE_URL.replace(/\/$/, "");
-  const url = `${baseUrl}/v1beta/models/${model}:generateContent?key=${encodeURIComponent(
-    API_KEY
-  )}`;
+  const url = `${baseUrl}/v1beta/models/${encodeURIComponent(
+    model
+  )}:generateContent?key=${encodeURIComponent(API_KEY)}`;
 
   const res = await fetch(url, {
     method: "POST",
@@ -55,11 +58,11 @@ async function callGemini(model: string, body: any): Promise<any> {
   return res.json();
 }
 
-// 清洗模型返回的字符串，尽量变成合法 JSON
+// 尽量把模型的回答“抠”成合法 JSON
 function sanitizeJsonFromModel(raw: string): string {
   let s = raw.trim();
 
-  // 去掉 ```json ... ``` 代码块包裹
+  // 去掉 ```json ... ``` 代码块
   if (s.startsWith("```")) {
     const firstNewline = s.indexOf("\n");
     if (firstNewline !== -1) {
@@ -72,14 +75,14 @@ function sanitizeJsonFromModel(raw: string): string {
     s = s.trim();
   }
 
-  // 截取从第一个 { 到最后一个 }，把前后废话裁掉
+  // 截取从第一个 { 到最后一个 } 的内容
   const firstBrace = s.indexOf("{");
   const lastBrace = s.lastIndexOf("}");
   if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
     s = s.slice(firstBrace, lastBrace + 1);
   }
 
-  // 按行处理，删掉注释行
+  // 按行删掉注释、空行
   const lines = s
     .split("\n")
     .map((line) => line.trim())
@@ -95,28 +98,34 @@ function sanitizeJsonFromModel(raw: string): string {
 
   s = lines.join("\n");
 
-  // 去掉 } 或 ] 前面的尾逗号，例如 "..., }" 或 "..., ]"
+  // 去掉 } 或 ] 前面的尾逗号
   s = s.replace(/,(\s*[}\]])/g, "$1");
 
   return s.trim();
 }
 
-// 文本：生成 N 组拍摄方案（根据 portraitCount / landscapeCount）
-export const generateShootingPlans = async (input: UserInput): Promise<ShootingPlan[]> => {
-  const total = input.portraitCount + input.landscapeCount;
+// 文本：根据 portraitCount / landscapeCount 生成拍摄方案
+export const generateShootingPlans = async (
+  input: UserInput
+): Promise<ShootingPlan[]> => {
+  // 如果你的 UserInput 里还没有这两个字段，就改回固定 6 组也行
+  const portraitCount = (input as any).portraitCount ?? 3;
+  const landscapeCount = (input as any).landscapeCount ?? 3;
+  const total = portraitCount + landscapeCount;
+
   if (total === 0) return [];
 
   const prompt = `
 背景信息:
-人物: ${input.person}
-地点: ${input.location}
-环境: ${input.environment}
-期望风格: ${input.style}
+- 人物: ${input.person}
+- 地点: ${input.location}
+- 环境: ${input.environment}
+- 期望风格: ${input.style}
 
 请生成 ${total} 个极度详细、新手友好的拍摄方案。
 其中:
-- ${input.portraitCount} 个方案为 9:16 竖构图 (适合手机/社媒)。
-- ${input.landscapeCount} 个方案为 16:9 横构图 (电影感/故事感)。
+- ${portraitCount} 个方案为 9:16 竖构图 (适合手机/社媒)。
+- ${landscapeCount} 个方案为 16:9 横构图 (电影感/故事感)。
 
 请按顺序先输出所有 9:16 竖构图方案，再输出所有 16:9 横构图方案。
 
@@ -154,14 +163,10 @@ export const generateShootingPlans = async (input: UserInput): Promise<ShootingP
 `;
 
   const body = {
-    systemInstruction: {
-      role: "system",
-      parts: [{ text: SYSTEM_INSTRUCTION }],
-    },
     contents: [
       {
         role: "user",
-        parts: [{ text: prompt }],
+        parts: [{ text: SYSTEM_INSTRUCTION + "\n\n" + prompt }],
       },
     ],
   };
@@ -208,8 +213,8 @@ export const generateSketch = async (
             {
               text: `${prompt}
 
-Please generate a simple black and white line drawing sketch only, no colors, clear composition,
-suitable for aspect ratio ${validRatio}.`,
+Please generate a simple black and white line drawing sketch only, no colors,
+clear composition, suitable for aspect ratio ${validRatio}.`,
             },
           ],
         },

@@ -214,14 +214,32 @@ clear composition, suitable for aspect ratio ${validRatio}.`,
     const data = await callGemini(IMAGE_MODEL, body);
 
     const parts = data?.candidates?.[0]?.content?.parts || [];
+
+    // ① 先尝试官方 JSON 格式：inline_data / inlineData
     for (const part of parts) {
       const inlineData = (part as any).inline_data || (part as any).inlineData;
       if (inlineData && inlineData.data) {
-        const mimeType = inlineData.mime_type || inlineData.mimeType || "image/png";
+        const mimeType =
+          inlineData.mime_type || inlineData.mimeType || "image/png";
         return `data:${mimeType};base64,${inlineData.data}`;
       }
     }
 
+    // ② 兼容 newapi 把图片塞在 text 里的情况：![image](data:image/png;base64,....)
+    for (const part of parts) {
+      const text = (part as any).text;
+      if (typeof text === "string") {
+        const match = text.match(
+          /(data:image\/[a-zA-Z0-9.+-]+;base64,[^)"]+)/
+        );
+        if (match && match[1]) {
+          // 直接就是 data URL，可以给 <img src=...> 用
+          return match[1];
+        }
+      }
+    }
+
+    console.error("未在返回中找到图片数据:", JSON.stringify(data, null, 2));
     return null;
   } catch (error) {
     console.error("Error generating sketch:", error);

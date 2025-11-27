@@ -1,38 +1,30 @@
 import { ShootingPlan, UserInput } from "../types";
 
-// 只用 Vite 的环境变量，避免 Node 端的 process 乱入
-const API_KEY = import.meta.env.VITE_GEMINI_API_KEY as string | undefined;
+// 用 Vite 注入的 process.env.API_KEY（vite.config.ts 里已经 define 了）
+const API_KEY = process.env.API_KEY as string | undefined;
 
 // NewAPI 网关地址
 const NEWAPI_BASE_URL = "https://api.gemai.cc";
 
-// 文本 / 图片 使用的模型名（按你在 newapi 控制台里对应的 Google 模型来调）
-// 不行就先用 gemini-2.0-flash 测试，稳定一点
+// 文本 / 图片 模型（先用官方稳定的 text 模型，后面你可以自己改）
 const TEXT_MODEL = "gemini-2.5-flash-image";
 const IMAGE_MODEL = "gemini-2.5-flash-image";
 
 const SYSTEM_INSTRUCTION = `
-你是一位拥有 20 年经验的顶级人像摄影导师，你正在指导一位完全不懂摄影的新手，
-使用 Sony A7R3 和 24-70mm F4 镜头拍出“看起来很专业”的人像大片。
+你是一位拥有 20 年经验的顶级人像摄影导师，正在指导一个完全不懂摄影的新手，
+用 Sony A7R3 + 24-70mm F4 拍出“看上去很专业”的人像照片。
 
-你的任务是基于用户输入设计“保姆级”拍摄方案：
-- 一部分 9:16 竖构图（适合手机/社媒）
-- 一部分 16:9 横构图（更电影感）
-
-硬件约束：
-- 镜头最大光圈 F4.0，如需背景虚化，优先使用 50–70mm 端并靠近拍摄。
-- 利用 4240 万像素，构图可以稍微宽松，方便后期裁切。
-- 开启机身防抖，静态人像快门可以低到 1/60s 左右。
-
-你必须把复杂的摄影知识，翻译成完全不懂摄影的人也能照做的“傻瓜式步骤”。
-所有说明使用中文，语气友好但直接，多用可执行动作，少用抽象形容词。
+要求：
+- 所有参数必须具体：焦段、光圈、快门、ISO、白平衡。
+- 所有动作必须是普通人能听懂、照着做的步骤。
+- 输出为 JSON，对每一组方案给出完整字段。
 `;
 
 // 通用 HTTP 调用 NewAPI / Google Gemini
 async function callGemini(model: string, body: any): Promise<any> {
   if (!API_KEY) {
     throw new Error(
-      "VITE_GEMINI_API_KEY 未配置，请在 Zeabur 环境变量中设置 VITE_GEMINI_API_KEY"
+      "API_KEY 未配置：请在 Zeabur 环境变量中设置 GEMINI_API_KEY，再重新部署。"
     );
   }
 
@@ -58,7 +50,7 @@ async function callGemini(model: string, body: any): Promise<any> {
   return res.json();
 }
 
-// 尽量把模型的回答“抠”成合法 JSON
+// 把模型返回的文本尽量“抠”成合法 JSON 字符串
 function sanitizeJsonFromModel(raw: string): string {
   let s = raw.trim();
 
@@ -82,7 +74,7 @@ function sanitizeJsonFromModel(raw: string): string {
     s = s.slice(firstBrace, lastBrace + 1);
   }
 
-  // 按行删掉注释、空行
+  // 删掉注释行
   const lines = s
     .split("\n")
     .map((line) => line.trim())
@@ -108,58 +100,56 @@ function sanitizeJsonFromModel(raw: string): string {
 export const generateShootingPlans = async (
   input: UserInput
 ): Promise<ShootingPlan[]> => {
-  // 如果你的 UserInput 里还没有这两个字段，就改回固定 6 组也行
-  const portraitCount = (input as any).portraitCount ?? 3;
-  const landscapeCount = (input as any).landscapeCount ?? 3;
+  const portraitCount = input.portraitCount ?? 3;
+  const landscapeCount = input.landscapeCount ?? 3;
   const total = portraitCount + landscapeCount;
 
   if (total === 0) return [];
 
   const prompt = `
-背景信息:
+用户输入：
 - 人物: ${input.person}
-- 地点: ${input.location}
-- 环境: ${input.environment}
+- 拍摄地点: ${input.location}
+- 环境描述: ${input.environment}
 - 期望风格: ${input.style}
 
 请生成 ${total} 个极度详细、新手友好的拍摄方案。
-其中:
-- ${portraitCount} 个方案为 9:16 竖构图 (适合手机/社媒)。
-- ${landscapeCount} 个方案为 16:9 横构图 (电影感/故事感)。
+其中：
+- ${portraitCount} 个方案为 9:16 竖构图 (适合手机竖屏内容)；
+- ${landscapeCount} 个方案为 16:9 横构图 (适合横屏视频 / 电影感)。
 
-请按顺序先输出所有 9:16 竖构图方案，再输出所有 16:9 横构图方案。
+输出要求：
+1）只输出合法 JSON，不要解释文字，不要代码块标记。
+2）结构如下：
 
-输出格式必须是合法 JSON：
 {
   "plans": [
     {
-      "title": "...",
+      "title": "方案标题，稍微有点电影感",
       "targetAspectRatio": "9:16 或 16:9",
-      "imagePrompt": "英文线稿提示词，用于生成黑白线稿构图草图",
-      "focalLength": "...",
-      "aperture": "...",
-      "shutterSpeed": "...",
-      "iso": "...",
-      "whiteBalance": "...",
-      "colorTint": "...",
-      "distance": "...",
-      "angle": "...",
-      "lightingGuide": "...",
-      "compositionGuide": "...",
-      "photographerPosition": "...",
-      "poseAction": "...",
-      "poseEyes": "...",
-      "modelDirecting": "...",
-      "expertAdvice": "..."
+      "imagePrompt": "英文草图提示词，用于生成黑白线稿构图草图",
+
+      "focalLength": "例如：55mm",
+      "aperture": "例如：F4.0",
+      "shutterSpeed": "例如：1/160s",
+      "iso": "例如：ISO 400",
+      "whiteBalance": "例如：日光 / 阴天 / 5500K",
+      "colorTint": "色调微调描述",
+
+      "distance": "与模特距离，例如：1.5 米",
+      "angle": "拍摄角度描述，例如：略微仰拍",
+
+      "lightingGuide": "一步一步告诉新手模特该站在哪、光从哪里来",
+      "compositionGuide": "一步一步告诉新手主体放在哪里、留多少空间",
+      "photographerPosition": "一步一步告诉摄影师自己站哪、是否半蹲 / 走几步",
+
+      "poseAction": "身体动作 / 姿态",
+      "poseEyes": "眼神与头部方向",
+      "modelDirecting": "你对模特说的话，直接写台词",
+      "expertAdvice": "额外的小技巧，可提高成片率"
     }
   ]
 }
-
-注意：
-- 不要输出任何解释性文字。
-- 不要加 "```json" 代码块。
-- 不要加注释。
-- 不要在最后一个字段后面加逗号。
 `;
 
   const body = {
@@ -191,7 +181,7 @@ export const generateShootingPlans = async (
   } catch (e) {
     console.error("模型返回非合法 JSON，原始内容:", rawText);
     console.error("清洗后的 JSON 字符串:", cleaned);
-    throw new Error("模型返回非合法 JSON，请打开控制台查看详细日志");
+    throw new Error("模型返回非合法 JSON，请打开浏览器控制台查看详细日志");
   }
 
   return (parsed.plans || []) as ShootingPlan[];

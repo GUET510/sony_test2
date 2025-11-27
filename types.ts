@@ -1,3 +1,4 @@
+
 export interface ShootingPlan {
   title: string;
   imagePrompt: string;
@@ -26,6 +27,8 @@ export interface UserInput {
   location: string;
   environment: string;
   style: string;
+  portraitCount: number;
+  landscapeCount: number;
 }
 
 export enum LoadingState {

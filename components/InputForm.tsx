@@ -1,6 +1,7 @@
+
 import React, { useState } from 'react';
 import { UserInput, LoadingState } from '../types';
-import { Aperture, Sparkles } from 'lucide-react';
+import { Aperture, Sparkles, Smartphone, MonitorPlay } from 'lucide-react';
 
 interface InputFormProps {
   onSubmit: (input: UserInput) => void;
@@ -28,10 +29,16 @@ const InputForm: React.FC<InputFormProps> = ({ onSubmit, loadingState }) => {
     location: '',
     environment: '',
     style: '',
+    portraitCount: 1,
+    landscapeCount: 1
   });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setInput({ ...input, [e.target.name]: e.target.value });
+  };
+  
+  const handleCountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setInput({ ...input, [e.target.name]: parseInt(e.target.value, 10) || 0 });
   };
 
   const handlePresetClick = (field: keyof UserInput, value: string) => {
@@ -40,6 +47,11 @@ const InputForm: React.FC<InputFormProps> = ({ onSubmit, loadingState }) => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (input.portraitCount === 0 && input.landscapeCount === 0) {
+        alert("请至少选择生成一个方案");
+        return;
+    }
+
     if (loadingState === LoadingState.IDLE || loadingState === LoadingState.COMPLETE || loadingState === LoadingState.ERROR) {
         onSubmit(input);
     }
@@ -166,6 +178,61 @@ const InputForm: React.FC<InputFormProps> = ({ onSubmit, loadingState }) => {
                     </button>
                 ))}
             </div>
+          </div>
+
+          {/* Quantity Settings */}
+          <div className="md:col-span-2 bg-neutral-950/50 p-5 rounded-xl border border-neutral-800/50 mt-2">
+             <label className="text-sm font-medium text-neutral-400 uppercase tracking-wider mb-4 block">
+                方案数量 (默认各1组)
+             </label>
+             <div className="grid grid-cols-2 gap-8">
+                <div>
+                   <div className="flex justify-between items-center mb-3">
+                      <div className="flex items-center gap-2 text-neutral-300 text-xs font-medium">
+                        <Smartphone className="w-4 h-4 text-neutral-500" />
+                        竖屏 (9:16)
+                      </div>
+                      <span className="text-orange-500 font-mono text-sm bg-orange-500/10 px-2 py-0.5 rounded">{input.portraitCount} 组</span>
+                   </div>
+                   <input 
+                      type="range" 
+                      min="0" 
+                      max="5" 
+                      step="1"
+                      name="portraitCount"
+                      value={input.portraitCount}
+                      onChange={handleCountChange}
+                      className="w-full h-2 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50"
+                   />
+                   <div className="flex justify-between mt-1 text-[10px] text-neutral-600 font-mono">
+                      <span>0</span>
+                      <span>5</span>
+                   </div>
+                </div>
+                <div>
+                   <div className="flex justify-between items-center mb-3">
+                      <div className="flex items-center gap-2 text-neutral-300 text-xs font-medium">
+                         <MonitorPlay className="w-4 h-4 text-neutral-500" />
+                         横屏 (16:9)
+                      </div>
+                      <span className="text-blue-500 font-mono text-sm bg-blue-500/10 px-2 py-0.5 rounded">{input.landscapeCount} 组</span>
+                   </div>
+                   <input 
+                      type="range" 
+                      min="0" 
+                      max="5" 
+                      step="1"
+                      name="landscapeCount"
+                      value={input.landscapeCount}
+                      onChange={handleCountChange}
+                      className="w-full h-2 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                   />
+                   <div className="flex justify-between mt-1 text-[10px] text-neutral-600 font-mono">
+                      <span>0</span>
+                      <span>5</span>
+                   </div>
+                </div>
+             </div>
           </div>
         </div>
 

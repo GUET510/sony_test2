@@ -7,8 +7,8 @@ const API_KEY = process.env.API_KEY as string | undefined;
 const NEWAPI_BASE_URL = "https://api.gemai.cc";
 
 // 文本 / 图片 模型（先用官方稳定的 text 模型，后面你可以自己改）
-const TEXT_MODEL = "gemini-2.5-flash-image";
-const IMAGE_MODEL = "gemini-2.5-flash-image";
+const TEXT_MODEL = "[满血C]gemini-2.5-pro-thinking";
+const IMAGE_MODEL = "[满血C]gemini-2.5-pro-thinking";
 
 const SYSTEM_INSTRUCTION = `
 你是一位拥有 20 年经验的顶级人像摄影导师，正在指导一个完全不懂摄影的新手，
